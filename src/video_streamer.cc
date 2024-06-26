@@ -62,7 +62,7 @@ int VideoStreamer::Config() {
     std::cerr << "Error: Could not guess output format" << std::endl;
     return -1;
   }
-  formatContext->oformat = outputFormat;
+  formatContext->oformat = const_cast<AVOutputFormat*>(outputFormat);
 
   // Open the output URL
   if (avio_open(&formatContext->pb, outputURL, AVIO_FLAG_WRITE) < 0) {
@@ -197,14 +197,14 @@ int VideoStreamer::Unconfig() {
 
 int VideoStreamer::initTest() {
 
-
+  Config();
   int count = 0;
 
   while (count++ < 100) {
-
+    Stream();
   }
 
-
+  Unconfig();
 
   return 0;
 }
