@@ -15,18 +15,22 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-VideoStreamer::VideoStreamer() {
+VideoStreamer::VideoStreamer() : cap(0) {
   std::cout << "Hei" << std::endl;
 }
 
-int VideoStreamer::initTest(int argc, char* argv[]) {
-  if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <ip> <port>" << std::endl;
-    return -1;
-  }
+int VideoStreamer::test2() {
+  const char* ip = robot_ip.c_str();
+  int port = robot_port;
+  char outputURL[256];
+  snprintf(outputURL, sizeof(outputURL), "rtp://%s:%d", ip, port);
+  std::cout << outputURL << std::endl;
+  return 0;
+}
 
-  const char* ip = argv[1];
-  int port = std::stoi(argv[2]);
+int VideoStreamer::Config() {
+  const char* ip = robot_ip.c_str();
+  int port = robot_port;
   char outputURL[256];
   snprintf(outputURL, sizeof(outputURL), "rtp://%s:%d", ip, port);
 
@@ -34,20 +38,19 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
   avformat_network_init();
 
   // Set up the video capture
-  cv::VideoCapture cap(0);
   if (!cap.isOpened()) {
     std::cerr << "Error: Could not open camera" << std::endl;
     return -1;
   }
 
   // Get the frame properties
-  int width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-  int height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-  int fps = static_cast<int>(cap.get(cv::CAP_PROP_FPS));
+  width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+  height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+  fps = static_cast<int>(cap.get(cv::CAP_PROP_FPS));
   if (fps == 0) fps = 30; // Default to 30 fps if camera doesn't provide FPS
 
   // Allocate the AVFormatContext
-  AVFormatContext* formatContext = avformat_alloc_context();
+  formatContext = avformat_alloc_context();
   if (!formatContext) {
     std::cerr << "Error: Could not allocate format context" << std::endl;
     return -1;
@@ -68,7 +71,7 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
   }
 
   // Create a new video stream
-  AVStream* stream = avformat_new_stream(formatContext, nullptr);
+  stream = avformat_new_stream(formatContext, nullptr);
   if (!stream) {
     std::cerr << "Error: Could not create new stream" << std::endl;
     return -1;
@@ -81,7 +84,7 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
     return -1;
   }
 
-  AVCodecContext* codecContext = avcodec_alloc_context3(codec);
+  codecContext = avcodec_alloc_context3(codec);
   if (!codecContext) {
     std::cerr << "Error: Could not allocate codec context" << std::endl;
     return -1;
@@ -122,15 +125,15 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
   }
 
   // Set up the scaling context
-  SwsContext* swsContext = sws_getContext(width, height, AV_PIX_FMT_BGR24, width, height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr);
+  swsContext = sws_getContext(width, height, AV_PIX_FMT_BGR24, width, height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr);
   if (!swsContext) {
     std::cerr << "Error: Could not create scaling context" << std::endl;
     return -1;
   }
 
   // Allocate frames
-  AVFrame* frame = av_frame_alloc();
-  AVFrame* yuvFrame = av_frame_alloc();
+  frame = av_frame_alloc();
+  yuvFrame = av_frame_alloc();
   if (!frame || !yuvFrame) {
     std::cerr << "Error: Could not allocate frames" << std::endl;
     return -1;
@@ -145,35 +148,41 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
     return -1;
   }
 
-  int frameIndex = 0;
-  cv::Mat bgrFrame;
+  return 1;
+}
 
-  while (true) {
-    // Capture a frame from the camera
-    cap >> bgrFrame;
-    if (bgrFrame.empty()) break;
+int VideoStreamer::Stream() {
+  // Capture a frame from the camera
+  std::cout << count << std::endl;
 
-    // Convert the frame to AVFrame
-    av_image_fill_arrays(frame->data, frame->linesize, bgrFrame.data, AV_PIX_FMT_BGR24, width, height, 1);
+  cap >> bgrFrame;
+  if (bgrFrame.empty()) {return 0;}
 
-    // Convert the frame from BGR to YUV
-    sws_scale(swsContext, frame->data, frame->linesize, 0, height, yuvFrame->data, yuvFrame->linesize);
+  // Convert the frame to AVFrame
+  av_image_fill_arrays(frame->data, frame->linesize, bgrFrame.data, AV_PIX_FMT_BGR24, width, height, 1);
 
-    yuvFrame->pts = frameIndex++;
+  // Convert the frame from BGR to YUV
+  sws_scale(swsContext, frame->data, frame->linesize, 0, height, yuvFrame->data, yuvFrame->linesize);
 
-    // Encode the frame
-    AVPacket pkt = {0};
-    av_init_packet(&pkt);
+  yuvFrame->pts = frameIndex++;
 
-    if (avcodec_send_frame(codecContext, yuvFrame) == 0) {
-      while (avcodec_receive_packet(codecContext, &pkt) == 0) {
-        pkt.stream_index = stream->index;
-        av_interleaved_write_frame(formatContext, &pkt);
-        av_packet_unref(&pkt);
-      }
+  // Encode the frame
+  AVPacket pkt = {nullptr};
+  av_packet_unref(&pkt);
+  pkt.data = nullptr;
+  pkt.size = 0;
+
+  if (avcodec_send_frame(codecContext, yuvFrame) == 0) {
+    while (avcodec_receive_packet(codecContext, &pkt) == 0) {
+      pkt.stream_index = stream->index;
+      av_interleaved_write_frame(formatContext, &pkt);
+      av_packet_unref(&pkt);
     }
   }
+  return 1;
+}
 
+int VideoStreamer::Unconfig() {
   // Write the trailer
   av_write_trailer(formatContext);
 
@@ -181,10 +190,21 @@ int VideoStreamer::initTest(int argc, char* argv[]) {
   av_frame_free(&frame);
   av_frame_free(&yuvFrame);
   sws_freeContext(swsContext);
-  avcodec_close(codecContext);
   avcodec_free_context(&codecContext);
   avio_close(formatContext->pb);
   avformat_free_context(formatContext);
+}
+
+int VideoStreamer::initTest() {
+
+
+  int count = 0;
+
+  while (count++ < 100) {
+
+  }
+
+
 
   return 0;
 }

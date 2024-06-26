@@ -4,7 +4,9 @@
 
 #include "../include/video-stream/ice_machine_states.h"
 
+void Unconfigured::Enter(IceStateMachine &state_machine) {
 
+}
 void Unconfigured::Execute(IceStateMachine& state_machine) {
   bool success = state_machine.OnUnconfigured();
   if (success) {
