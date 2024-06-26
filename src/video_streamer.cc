@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <fstream>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -201,9 +202,38 @@ int VideoStreamer::Unconfig() {
   return 1;
 }
 
+void VideoStreamer::WriteSDP(const char* ip, int port) {
+  std::ofstream sdpFile("stream.sdp");
+  if (!sdpFile.is_open()) {
+    std::cerr << "Error: Could not open SDP file for writing" << std::endl;
+    return;
+  }
+
+  sdpFile << "v=0\n";
+  sdpFile << "o=- 0 0 IN IP4 " << ip << "\n";
+  sdpFile << "s=Video Stream\n";
+  sdpFile << "c=IN IP4 " << ip << "\n";
+  sdpFile << "t=0 0\n";
+  sdpFile << "m=video " << port << " RTP/AVP 96\n";
+  sdpFile << "a=rtpmap:96 H264/90000\n";
+  sdpFile << "a=fmtp:96 packetization-mode=1; sprop-parameter-sets=";
+
+  for (int i = 0; i < formatContext->nb_streams; ++i) {
+    AVCodecParameters *codecpar = formatContext->streams[i]->codecpar;
+    if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO && codecpar->extradata_size > 0) {
+      sdpFile.write((const char*)codecpar->extradata, codecpar->extradata_size);
+      break;
+    }
+  }
+
+  sdpFile << "\n";
+  sdpFile.close();
+}
+
 int VideoStreamer::initTest() {
 
   Config();
+  WriteSDP(robot_ip.c_str(),robot_port);
   count = 0;
 
   while (count++ < 100) {

@@ -27,6 +27,8 @@ class VideoStreamer {
   int Stream();
   int Unconfig();
 
+  void WriteSDP(const char* ip, int port)
+
   int test2();
   int initTest();
 
