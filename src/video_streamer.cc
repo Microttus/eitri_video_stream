@@ -158,7 +158,9 @@ int VideoStreamer::Stream() {
   cap >> bgrFrame;
   if (bgrFrame.empty()) {return 0;}
 
-  std::cout << bgrFrame << std::endl;
+  // Display the frame using OpenCV
+  cv::imshow("Captured Frame", bgrFrame);
+  if (cv::waitKey(1) >= 0) return 0; // Exit on any key press
 
   // Convert the frame to AVFrame
   av_image_fill_arrays(frame->data, frame->linesize, bgrFrame.data, AV_PIX_FMT_BGR24, width, height, 1);
@@ -195,6 +197,8 @@ int VideoStreamer::Unconfig() {
   avcodec_free_context(&codecContext);
   avio_close(formatContext->pb);
   avformat_free_context(formatContext);
+
+  return 1;
 }
 
 int VideoStreamer::initTest() {
