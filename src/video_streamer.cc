@@ -158,6 +158,8 @@ int VideoStreamer::Stream() {
   cap >> bgrFrame;
   if (bgrFrame.empty()) {return 0;}
 
+  std::cout << bgrFrame << std::endl;
+
   // Convert the frame to AVFrame
   av_image_fill_arrays(frame->data, frame->linesize, bgrFrame.data, AV_PIX_FMT_BGR24, width, height, 1);
 
@@ -198,7 +200,7 @@ int VideoStreamer::Unconfig() {
 int VideoStreamer::initTest() {
 
   Config();
-  int count = 0;
+  count = 0;
 
   while (count++ < 100) {
     Stream();
