@@ -154,12 +154,48 @@ int VideoStreamer::Config() {
   return 1;
 }
 
+//int VideoStreamer::Stream() {
+//  // Capture a frame from the camera
+//  std::cout << count << std::endl;
+//
+//  *cap_ptr >> bgrFrame;
+//  if (bgrFrame.empty()) {return 0;}
+//
+//  // Display the frame using OpenCV
+//  cv::imshow("Captured Frame", bgrFrame);
+//  if (cv::waitKey(1) >= 0) return 0; // Exit on any key press
+//
+//  // Convert the frame to AVFrame
+//  av_image_fill_arrays(frame->data, frame->linesize, bgrFrame.data, AV_PIX_FMT_BGR24, width, height, 1);
+//
+//  // Convert the frame from BGR to YUV
+//  sws_scale(swsContext, frame->data, frame->linesize, 0, height, yuvFrame->data, yuvFrame->linesize);
+//
+//  yuvFrame->pts = frameIndex++;
+//
+//  // Encode the frame
+//  AVPacket pkt = {nullptr};
+//  av_packet_unref(&pkt);
+//  pkt.data = nullptr;
+//  pkt.size = 0;
+//
+//  if (avcodec_send_frame(codecContext, yuvFrame) == 0) {
+//    while (avcodec_receive_packet(codecContext, &pkt) == 0) {
+//      pkt.stream_index = stream->index;
+//      av_interleaved_write_frame(formatContext, &pkt);
+//      av_packet_unref(&pkt);
+//    }
+//  }
+//  return 1;
+//}
+¨
 int VideoStreamer::Stream() {
   // Capture a frame from the camera
-  std::cout << count << std::endl;
-
   *cap_ptr >> bgrFrame;
-  if (bgrFrame.empty()) {return 0;}
+  if (bgrFrame.empty()) {
+    std::cerr << "Warning: Captured empty frame. Skipping..." << std::endl;
+    return 0;
+  }
 
   // Display the frame using OpenCV
   cv::imshow("Captured Frame", bgrFrame);
@@ -174,20 +210,40 @@ int VideoStreamer::Stream() {
   yuvFrame->pts = frameIndex++;
 
   // Encode the frame
-  AVPacket pkt = {nullptr};
-  av_packet_unref(&pkt);
-  pkt.data = nullptr;
+  AVPacket pkt;
+  av_init_packet(&pkt);
+  pkt.data = nullptr;  // Packet data will be allocated by the encoder
   pkt.size = 0;
 
-  if (avcodec_send_frame(codecContext, yuvFrame) == 0) {
-    while (avcodec_receive_packet(codecContext, &pkt) == 0) {
-      pkt.stream_index = stream->index;
-      av_interleaved_write_frame(formatContext, &pkt);
-      av_packet_unref(&pkt);
-    }
+  int ret = avcodec_send_frame(codecContext, yuvFrame);
+  if (ret < 0) {
+    std::cerr << "Error sending frame to encoder: " << av_err2str(ret) << std::endl;
+    return ret;
   }
+
+  while (ret >= 0) {
+    ret = avcodec_receive_packet(codecContext, &pkt);
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      break; // No more packets available, or the encoder is done
+    } else if (ret < 0) {
+      std::cerr << "Error receiving packet from encoder: " << av_err2str(ret) << std::endl;
+      return ret;
+    }
+
+    pkt.stream_index = stream->index;
+
+    ret = av_interleaved_write_frame(formatContext, &pkt);
+    if (ret < 0) {
+      std::cerr << "Error writing packet to output: " << av_err2str(ret) << std::endl;
+      return ret;
+    }
+
+    av_packet_unref(&pkt); // Free the packet after it's been written
+  }
+
   return 1;
 }
+
 
 int VideoStreamer::Unconfig() {
   // Release Camera
