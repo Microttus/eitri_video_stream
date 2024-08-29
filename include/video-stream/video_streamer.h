@@ -31,6 +31,7 @@ class VideoStreamer {
   std::string GetEnvironmentVariable(const std::string& env_var, std::string default_value);
 
   int initTest();
+  int VideoStreamConfig();
   int VideoStream();
 
  private:

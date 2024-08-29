@@ -25,6 +25,8 @@ int main(int argc, char* argv[]) {
 
   SetupSignalHandlers();
 
+  video_streamer_->VideoStreamConfig();
+
   while (!shutdown_requested.load()) {
     video_streamer_->VideoStream();
   }

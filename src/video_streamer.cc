@@ -188,7 +188,7 @@ int VideoStreamer::Config() {
 //  }
 //  return 1;
 //}
-¨
+
 int VideoStreamer::Stream() {
   // Capture a frame from the camera
   *cap_ptr >> bgrFrame;
@@ -217,7 +217,7 @@ int VideoStreamer::Stream() {
 
   int ret = avcodec_send_frame(codecContext, yuvFrame);
   if (ret < 0) {
-    std::cerr << "Error sending frame to encoder: " << av_err2str(ret) << std::endl;
+    std::cerr << "Error sending frame to encoder: "  << std::endl;
     return ret;
   }
 
@@ -226,7 +226,7 @@ int VideoStreamer::Stream() {
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
       break; // No more packets available, or the encoder is done
     } else if (ret < 0) {
-      std::cerr << "Error receiving packet from encoder: " << av_err2str(ret) << std::endl;
+      std::cerr << "Error receiving packet from encoder: "  << std::endl;
       return ret;
     }
 
@@ -234,7 +234,7 @@ int VideoStreamer::Stream() {
 
     ret = av_interleaved_write_frame(formatContext, &pkt);
     if (ret < 0) {
-      std::cerr << "Error writing packet to output: " << av_err2str(ret) << std::endl;
+      std::cerr << "Error writing packet to output: " << std::endl;
       return ret;
     }
 
@@ -318,9 +318,12 @@ int VideoStreamer::initTest() {
   return 0;
 }
 
-int VideoStreamer::VideoStream() {
+int VideoStreamer::VideoStreamConfig() {
   Config();
   WriteSDP(rcs_ip.c_str(), com_port);
+}
+
+int VideoStreamer::VideoStream() {
 
   Stream();
 
