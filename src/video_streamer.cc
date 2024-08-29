@@ -293,25 +293,35 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
       uint8_t* extradata = codecpar->extradata;
       size_t extradata_size = codecpar->extradata_size;
 
-      // NAL units usually start with a start code (00 00 00 01)
+      // Search for SPS and PPS NAL units in extradata
       uint8_t* sps = nullptr;
       size_t sps_size = 0;
       uint8_t* pps = nullptr;
       size_t pps_size = 0;
 
-      // Extract SPS and PPS from extradata
-      for (size_t j = 4; j < extradata_size; j++) {
-        if (extradata[j - 4] == 0x00 && extradata[j - 3] == 0x00 &&
-            extradata[j - 2] == 0x00 && extradata[j - 1] == 0x01) {
-          uint8_t nal_type = extradata[j] & 0x1F;
-          if (nal_type == 7) { // SPS
-            sps = &extradata[j];
-            sps_size = extradata_size - j; // until next NAL start code
-          } else if (nal_type == 8 && sps) { // PPS
-            pps = &extradata[j];
-            pps_size = extradata_size - j; // until next NAL start code
-            break; // Assuming SPS comes first, followed by PPS
+      size_t nal_start = 0;
+      for (size_t j = 0; j < extradata_size - 4; ++j) {
+        if (extradata[j] == 0x00 && extradata[j + 1] == 0x00 &&
+            extradata[j + 2] == 0x00 && extradata[j + 3] == 0x01) {
+          nal_start = j + 4; // Skip start code
+          uint8_t nal_type = extradata[nal_start] & 0x1F;
+          size_t nal_end = nal_start + 1;
+          while (nal_end < extradata_size && !(extradata[nal_end] == 0x00 && extradata[nal_end + 1] == 0x00 &&
+              extradata[nal_end + 2] == 0x00 && extradata[nal_end + 3] == 0x01)) {
+            nal_end++;
           }
+
+          if (nal_type == 7) { // SPS NAL unit
+            sps = extradata + nal_start;
+            sps_size = nal_end - nal_start;
+          } else if (nal_type == 8) { // PPS NAL unit
+            pps = extradata + nal_start;
+            pps_size = nal_end - nal_start;
+          }
+
+          j = nal_end - 1; // Move to the end of this NAL unit
+
+          if (sps && pps) break; // Stop if both SPS and PPS are found
         }
       }
 
@@ -320,12 +330,14 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
         std::string pps_base64 = base64_encode(pps, pps_size);
         sdpFile << sps_base64 << "," << pps_base64;
       } else {
-        std::cerr << "Error: SPS or PPS not found in extradata" << std::endl;
+        std::cerr << "Error: Could not find SPS or PPS in extradata" << std::endl;
       }
 
       break; // Only need to process the first video stream
     }
   }
+
+  std::cout << "Closing sdp file" << std::endl;
 
   sdpFile << "\n";
   sdpFile.close();
