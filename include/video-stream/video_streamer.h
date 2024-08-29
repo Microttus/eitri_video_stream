@@ -45,6 +45,7 @@ class VideoStreamer {
 
   int frameIndex = 0;
   cv::Mat bgrFrame;
+
   AVFormatContext* formatContext;
   AVCodecContext* codecContext;
   AVStream* stream;

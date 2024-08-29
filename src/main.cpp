@@ -25,7 +25,11 @@ int main(int argc, char* argv[]) {
 
   SetupSignalHandlers();
 
-  video_streamer_->VideoStream();
+  while (!shutdown_requested.load()) {
+    video_streamer_->VideoStream();
+  }
+
+  video_streamer_.reset();
 
   std::cerr << "Main Func Exited" << std::endl;
 
