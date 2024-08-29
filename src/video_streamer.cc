@@ -287,39 +287,43 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
   sdpFile << "a=rtpmap:96 H264/90000\n";
   sdpFile << "a=fmtp:96 packetization-mode=1; sprop-parameter-sets=";
 
-  bool sps_found = false;
-  bool pps_found = false;
-
   for (int i = 0; i < formatContext->nb_streams; ++i) {
     AVCodecParameters* codecpar = formatContext->streams[i]->codecpar;
     if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO && codecpar->extradata_size > 0) {
       uint8_t* extradata = codecpar->extradata;
       size_t extradata_size = codecpar->extradata_size;
 
-      // Skip the first 5 bytes (NAL header) and then parse SPS and PPS
-      size_t offset = 4; // The first four bytes are usually the NAL size
-      while (offset < extradata_size) {
-        uint8_t nal_unit_type = extradata[offset] & 0x1F;
-        size_t nal_size = (extradata[offset - 4] << 24) |
-            (extradata[offset - 3] << 16) |
-            (extradata[offset - 2] << 8) |
-            extradata[offset - 1];
+      // NAL units usually start with a start code (00 00 00 01)
+      uint8_t* sps = nullptr;
+      size_t sps_size = 0;
+      uint8_t* pps = nullptr;
+      size_t pps_size = 0;
 
-        if (nal_unit_type == 7 && !sps_found) {  // SPS NAL unit
-          std::string sps = base64_encode(extradata + offset, nal_size);
-          sdpFile << sps;
-          sps_found = true;
-        } else if (nal_unit_type == 8 && !pps_found) {  // PPS NAL unit
-          if (sps_found) sdpFile << ",";
-          std::string pps = base64_encode(extradata + offset, nal_size);
-          sdpFile << pps;
-          pps_found = true;
+      // Extract SPS and PPS from extradata
+      for (size_t j = 4; j < extradata_size; j++) {
+        if (extradata[j - 4] == 0x00 && extradata[j - 3] == 0x00 &&
+            extradata[j - 2] == 0x00 && extradata[j - 1] == 0x01) {
+          uint8_t nal_type = extradata[j] & 0x1F;
+          if (nal_type == 7) { // SPS
+            sps = &extradata[j];
+            sps_size = extradata_size - j; // until next NAL start code
+          } else if (nal_type == 8 && sps) { // PPS
+            pps = &extradata[j];
+            pps_size = extradata_size - j; // until next NAL start code
+            break; // Assuming SPS comes first, followed by PPS
+          }
         }
-
-        offset += nal_size + 4; // Move to the next NAL unit
-        if (sps_found && pps_found) break;  // Stop if both SPS and PPS are found
       }
-      break;
+
+      if (sps && pps) {
+        std::string sps_base64 = base64_encode(sps, sps_size);
+        std::string pps_base64 = base64_encode(pps, pps_size);
+        sdpFile << sps_base64 << "," << pps_base64;
+      } else {
+        std::cerr << "Error: SPS or PPS not found in extradata" << std::endl;
+      }
+
+      break; // Only need to process the first video stream
     }
   }
 
@@ -330,7 +334,7 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
 std::string VideoStreamer::GetEnvironmentVariable(const std::string& env_var, std::string default_value) {
   const char* value = std::getenv(env_var.c_str());
   if (value == nullptr) {
-    std::cout << "Could not find" << env_var << "in environment, using default " << default_value << std::endl;
+    std::cout << "Could not find " << env_var << " in environment, using default " << default_value << std::endl;
     return default_value;
   }
   std::string str(value);
