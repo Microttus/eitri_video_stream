@@ -3,37 +3,36 @@
 #include <atomic>
 
 #include "../include/video-stream/video_streamer.h"
-#include "../include/video-stream/ice_state_machine.h"
+
 
 std::atomic<bool> shutdown_requested(false);
 
 inline void StopHandler(int) {
-  shutdown_requested.store(true);
+    shutdown_requested.store(true);
 }
 
 inline void SetupSignalHandlers() {
-  std::signal(SIGINT, StopHandler);
-  std::signal(SIGTERM, StopHandler);
+    std::signal(SIGINT, StopHandler);
+    std::signal(SIGTERM, StopHandler);
 }
 
 int main(int argc, char* argv[]) {
+    std::cout << "Started Video-Streaming using GStreamer!" << std::endl;
 
-  std::cout << "Started Video-Streaming!" << std::endl;
+    std::unique_ptr<VideoStreamer> video_streamer_ = std::make_unique<VideoStreamer>();
 
-  // Create video stream state machine object pointer
-  std::unique_ptr<VideoStreamer> video_streamer_ = std::make_unique<VideoStreamer>();
+    SetupSignalHandlers();
 
-  SetupSignalHandlers();
+    video_streamer_->Config();
 
-  video_streamer_->VideoStreamConfig();
+    while (!shutdown_requested.load()) {
+        video_streamer_->Stream();
+    }
 
-  while (!shutdown_requested.load()) {
-    video_streamer_->VideoStream();
-  }
+    video_streamer_.reset();
 
-  video_streamer_.reset();
+    std::cerr << "Main Func Exited" << std::endl;
 
-  std::cerr << "Main Func Exited" << std::endl;
-
-  return 0;
+    return 0;
 }
+

@@ -2,7 +2,7 @@
 // Created by Martin Økter on 29/05/2024.
 //
 
-#include "../include/video-stream/ice_machine_states.h"
+#include "ice_machine_states.h"
 
 void Unconfigured::Enter(IceStateMachine &state_machine) {
 

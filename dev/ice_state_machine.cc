@@ -2,7 +2,7 @@
 // Created by Martin Økter on 29/05/2024.
 //
 
-#include "../include/video-stream/ice_state_machine.h"
+#include "ice_state_machine.h"
 
 
 IceStateMachine::IceStateMachine(State* initial_state) : current_state_(initial_state) {}
