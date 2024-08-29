@@ -6,6 +6,11 @@
 #define VIDEO_STREAM_SRC_VIDEO_STREAMER_H_
 
 #include <string>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <vector>
 
 #include <opencv2/opencv.hpp>
 
@@ -16,7 +21,9 @@ extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+#include <libavutil/base64.h>
 }
+
 
 class VideoStreamer {
  public:

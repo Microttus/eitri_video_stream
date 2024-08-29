@@ -264,6 +264,13 @@ int VideoStreamer::Unconfig() {
   return 1;
 }
 
+std::string base64_encode(const uint8_t* data, size_t len) {
+  size_t output_len = AV_BASE64_SIZE(len);
+  std::vector<char> output(output_len);
+  av_base64_encode(output.data(), output.size(), data, len);
+  return std::string(output.data());
+}
+
 void VideoStreamer::WriteSDP(const char* ip, int port) {
   std::ofstream sdpFile("stream.sdp");
   if (!sdpFile.is_open()) {
@@ -280,10 +287,38 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
   sdpFile << "a=rtpmap:96 H264/90000\n";
   sdpFile << "a=fmtp:96 packetization-mode=1; sprop-parameter-sets=";
 
+  bool sps_found = false;
+  bool pps_found = false;
+
   for (int i = 0; i < formatContext->nb_streams; ++i) {
-    AVCodecParameters *codecpar = formatContext->streams[i]->codecpar;
+    AVCodecParameters* codecpar = formatContext->streams[i]->codecpar;
     if (codecpar->codec_type == AVMEDIA_TYPE_VIDEO && codecpar->extradata_size > 0) {
-      sdpFile.write((const char*)codecpar->extradata, codecpar->extradata_size);
+      uint8_t* extradata = codecpar->extradata;
+      size_t extradata_size = codecpar->extradata_size;
+
+      // Skip the first 5 bytes (NAL header) and then parse SPS and PPS
+      size_t offset = 4; // The first four bytes are usually the NAL size
+      while (offset < extradata_size) {
+        uint8_t nal_unit_type = extradata[offset] & 0x1F;
+        size_t nal_size = (extradata[offset - 4] << 24) |
+            (extradata[offset - 3] << 16) |
+            (extradata[offset - 2] << 8) |
+            extradata[offset - 1];
+
+        if (nal_unit_type == 7 && !sps_found) {  // SPS NAL unit
+          std::string sps = base64_encode(extradata + offset, nal_size);
+          sdpFile << sps;
+          sps_found = true;
+        } else if (nal_unit_type == 8 && !pps_found) {  // PPS NAL unit
+          if (sps_found) sdpFile << ",";
+          std::string pps = base64_encode(extradata + offset, nal_size);
+          sdpFile << pps;
+          pps_found = true;
+        }
+
+        offset += nal_size + 4; // Move to the next NAL unit
+        if (sps_found && pps_found) break;  // Stop if both SPS and PPS are found
+      }
       break;
     }
   }
