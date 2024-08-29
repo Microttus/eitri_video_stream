@@ -16,22 +16,24 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-VideoStreamer::VideoStreamer() : cap(0) {
-  std::cout << "Hei" << std::endl;
+VideoStreamer::VideoStreamer(){
+  std::cout << "Configuring video stream" << std::endl;
+
+  rcs_ip = GetEnvironmentVariable("RCS_IP", "127.0.0.1");
+  cam_ind = std::stoi(GetEnvironmentVariable("CAMIND", "0"));
+  com_port = std::stoi(GetEnvironmentVariable("COMPORT", "23513"));
+
+  //cap = cam_ind;
+  cap_ptr = std::make_unique<cv::VideoCapture>(cam_ind);
 }
 
-int VideoStreamer::test2() {
-  const char* ip = robot_ip.c_str();
-  int port = robot_port;
-  char outputURL[256];
-  snprintf(outputURL, sizeof(outputURL), "rtp://%s:%d", ip, port);
-  std::cout << outputURL << std::endl;
-  return 0;
+VideoStreamer::~VideoStreamer() {
+  Unconfig();
 }
 
 int VideoStreamer::Config() {
-  const char* ip = robot_ip.c_str();
-  int port = robot_port;
+  const char* ip = rcs_ip.c_str();
+  int port = com_port;
   char outputURL[256];
   snprintf(outputURL, sizeof(outputURL), "rtp://%s:%d", ip, port);
 
@@ -39,15 +41,15 @@ int VideoStreamer::Config() {
   avformat_network_init();
 
   // Set up the video capture
-  if (!cap.isOpened()) {
+  if (!cap_ptr->isOpened()) {
     std::cerr << "Error: Could not open camera" << std::endl;
     return -1;
   }
 
   // Get the frame properties
-  width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-  height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-  fps = static_cast<int>(cap.get(cv::CAP_PROP_FPS));
+  width = static_cast<int>(cap_ptr->get(cv::CAP_PROP_FRAME_WIDTH));
+  height = static_cast<int>(cap_ptr->get(cv::CAP_PROP_FRAME_HEIGHT));
+  fps = static_cast<int>(cap_ptr->get(cv::CAP_PROP_FPS));
   if (fps == 0) fps = 30; // Default to 30 fps if camera doesn't provide FPS
 
   // Allocate the AVFormatContext
@@ -156,7 +158,7 @@ int VideoStreamer::Stream() {
   // Capture a frame from the camera
   std::cout << count << std::endl;
 
-  cap >> bgrFrame;
+  *cap_ptr >> bgrFrame;
   if (bgrFrame.empty()) {return 0;}
 
   // Display the frame using OpenCV
@@ -188,6 +190,10 @@ int VideoStreamer::Stream() {
 }
 
 int VideoStreamer::Unconfig() {
+  // Release Camera
+  cap_ptr->release();
+  cap_ptr.reset();
+
   // Write the trailer
   av_write_trailer(formatContext);
 
@@ -230,10 +236,21 @@ void VideoStreamer::WriteSDP(const char* ip, int port) {
   sdpFile.close();
 }
 
+std::string VideoStreamer::GetEnvironmentVariable(const std::string& env_var, std::string default_value) {
+  const char* value = std::getenv(env_var.c_str());
+  if (value == nullptr) {
+    std::cout << "Could not find" << env_var << "in environment, using default " << default_value << std::endl;
+    return default_value;
+  }
+  std::string str(value);
+  std::cout << env_var << " successfully set to " << str << std::endl;
+  return str;
+}
+
 int VideoStreamer::initTest() {
 
   Config();
-  WriteSDP(robot_ip.c_str(),robot_port);
+  WriteSDP(rcs_ip.c_str(), com_port);
   count = 0;
 
   while (count++ < 100) {
@@ -241,6 +258,15 @@ int VideoStreamer::initTest() {
   }
 
   Unconfig();
+
+  return 0;
+}
+
+int VideoStreamer::VideoStream() {
+  Config();
+  WriteSDP(rcs_ip.c_str(), com_port);
+
+  Stream();
 
   return 0;
 }

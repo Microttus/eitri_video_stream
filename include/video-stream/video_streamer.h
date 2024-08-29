@@ -21,24 +21,27 @@ extern "C" {
 class VideoStreamer {
  public:
   VideoStreamer();
-  ~VideoStreamer() = default;
+  ~VideoStreamer();
 
   int Config();
   int Stream();
   int Unconfig();
 
-  void WriteSDP(const char* ip, int port)
+  void WriteSDP(const char* ip, int port);
+  std::string GetEnvironmentVariable(const std::string& env_var, std::string default_value);
 
-  int test2();
   int initTest();
+  int VideoStream();
 
  private:
-  std::string robot_ip = "127.0.0.1";
-  int robot_port = 23513;
+  std::string rcs_ip;
+  int com_port;
+  int cam_ind;
 
   int count = 0;
-  cv::VideoCapture cap;
-  int cameraIndex;
+  //cv::VideoCapture cap;
+
+  std::unique_ptr<cv::VideoCapture> cap_ptr;
 
   int frameIndex = 0;
   cv::Mat bgrFrame;
